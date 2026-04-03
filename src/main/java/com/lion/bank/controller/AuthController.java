@@ -24,20 +24,26 @@ public class AuthController {
     private final AuthService authService;
 
     @PostMapping("/login")
-    public ResponseEntity<String> login (@RequestBody AuthRequest authRequest){
+    public ResponseEntity<?> login (@RequestBody AuthRequest authRequest){
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(authRequest.getEmail(), authRequest.getPassword())
         );
-        return ResponseEntity.ok(jwtService.generateToken(authRequest.getEmail()));
+        return ResponseEntity.ok(Map.of("token", jwtService.generateToken(authRequest.getEmail())));
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody Map<String, String> request) {
-        try {
-            authService.register(request.get("name"), request.get("email"), request.get("password"));
-            return ResponseEntity.ok(Map.of("message", "Usuario registrado exitosamente"));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        authService.register(request.get("name"), request.get("email"), request.get("password"));
+        return ResponseEntity.ok(Map.of("message", "Usuario registrado. Se ha enviado un código de verificación a tu correo."));
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<?> verify(@RequestBody Map<String, String> request) {
+        String token = request.get("token");
+        if (token == null || token.trim().isEmpty()) {
+            throw new IllegalArgumentException("El código de verificación es requerido");
         }
+        authService.verifyEmail(token);
+        return ResponseEntity.ok(Map.of("message", "Cuenta verificada exitosamente"));
     }
 }

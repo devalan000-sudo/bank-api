@@ -13,12 +13,13 @@ import com.lion.bank.dto.UserDTO;
 import com.lion.bank.entity.Account;
 import com.lion.bank.entity.Transaction;
 import com.lion.bank.entity.User;
+import com.lion.bank.enums.AccountType;
 import com.lion.bank.enums.TransactionType;
 import com.lion.bank.exceptions.BankTransactionException;
 import com.lion.bank.exceptions.InsufficientBalanceException;
 import com.lion.bank.exceptions.ResourceNotFoundException;
 import com.lion.bank.repository.AccountRepository;
-import com.lion.bank.repository.TransasctionRepository;
+import com.lion.bank.repository.TransactionRepository;
 import com.lion.bank.repository.UserRepository;
 
 import jakarta.transaction.Transactional;
@@ -30,7 +31,7 @@ public class BankServiceImpl implements BankService {
 
     private final UserRepository userRepo;
     private final AccountRepository accountRepo;
-    private final TransasctionRepository transRepo;
+    private final TransactionRepository transRepo;
 
     @Override
     public UserDTO getUserDetails(Long userId) {
@@ -42,17 +43,32 @@ public class BankServiceImpl implements BankService {
                 .accounts(user.getAccounts().stream().map(account -> AccountDTO.builder()
                         .id(account.getId())
                         .accountNumber(account.getAccountNumber())
+                        .type(account.getType().name())
+                        .typeDisplay(getTypeDisplay(account.getType()))
                         .balance(account.getBalance())
                         .build()).collect(Collectors.toList()))
                 .build();
 
     }
 
+    private String getTypeDisplay(AccountType type) {
+        return switch (type) {
+            case CHECKING -> "Cuenta Corriente";
+            case SAVINGS -> "Cuenta de Ahorros";
+            case INVESTMENT -> "Inversión";
+        };
+    }
+
 
     @Override
+    @Transactional
     public void deposit(String accountNumber, BigDecimal amount) {
         Account account = accountRepo.findByAccountNumber(accountNumber)
         .orElseThrow(() -> new ResourceNotFoundException("Cuenta no encontrada"));
+
+        if (account.getType() != AccountType.CHECKING) {
+            throw new BankTransactionException("Solo se puede depositar a cuentas corrientes");
+        }
 
         account.setBalance(account.getBalance().add(amount));
         accountRepo.save(account);
@@ -61,9 +77,14 @@ public class BankServiceImpl implements BankService {
     }
 
     @Override
+    @Transactional
     public void withdraw(String accountNumber, BigDecimal amount) {
         Account account = accountRepo.findByAccountNumber(accountNumber)
         .orElseThrow(() -> new ResourceNotFoundException("Cuenta no encontrada"));
+
+        if (account.getType() != AccountType.CHECKING) {
+            throw new BankTransactionException("Solo se puede retirar de cuentas corrientes");
+        }
 
         if(account.getBalance().compareTo(amount) < 0){
             throw new InsufficientBalanceException("Fondos insuficientes!");
@@ -80,6 +101,10 @@ public class BankServiceImpl implements BankService {
         Account srcAccount = accountRepo.findByAccountNumber(sourceAccount)
         .orElseThrow(()-> new ResourceNotFoundException("La cuenta origen no fue encontrada"));
 
+        if (srcAccount.getType() != AccountType.CHECKING) {
+            throw new BankTransactionException("Solo se puede transferir desde cuentas corrientes");
+        }
+
         if(!srcAccount.getUser().getId().equals(currentUserId)){
             throw new BankTransactionException("La cuenta origen no pertenece al usuario autenticado");
         }
@@ -92,7 +117,7 @@ public class BankServiceImpl implements BankService {
         }
 
         boolean isOwnAccount = srcAccount.getUser().getId().equals(dest.getUser().getId());
-        BigDecimal commission = isOwnAccount ? BigDecimal.ZERO : new BigDecimal("1.50");
+        BigDecimal commission = isOwnAccount ? BigDecimal.ZERO : new BigDecimal("3.00");
         BigDecimal totalDeduction = amount.add(commission);
 
         if(srcAccount.getBalance().compareTo(totalDeduction) < 0){
@@ -108,6 +133,41 @@ public class BankServiceImpl implements BankService {
         saveTransaction(srcAccount, amount, commission, isOwnAccount ? TransactionType.TRANSFER_OWN : 
             TransactionType.TRANSFER_THIRD, sourceAccount, destinationAccount);
         
+    }
+
+    @Override
+    @Transactional
+    public void moveToAccount(Long userId, String fromAccount, String toAccount, BigDecimal amount) {
+        Account srcAccount = accountRepo.findByAccountNumber(fromAccount)
+            .orElseThrow(() -> new ResourceNotFoundException("Cuenta origen no encontrada"));
+
+        if (!srcAccount.getUser().getId().equals(userId)) {
+            throw new BankTransactionException("La cuenta origen no pertenece al usuario");
+        }
+
+        Account destAccount = accountRepo.findByAccountNumber(toAccount)
+            .orElseThrow(() -> new ResourceNotFoundException("Cuenta destino no encontrada"));
+
+        if (!destAccount.getUser().getId().equals(userId)) {
+            throw new BankTransactionException("La cuenta destino no pertenece al usuario");
+        }
+
+        if (fromAccount.equals(toAccount)) {
+            throw new BankTransactionException("La cuenta origen y destino no pueden ser las mismas");
+        }
+
+        if (srcAccount.getBalance().compareTo(amount) < 0) {
+            throw new InsufficientBalanceException("Fondos insuficientes");
+        }
+
+        srcAccount.setBalance(srcAccount.getBalance().subtract(amount));
+        destAccount.setBalance(destAccount.getBalance().add(amount));
+
+        accountRepo.save(srcAccount);
+        accountRepo.save(destAccount);
+
+        saveTransaction(srcAccount, amount, BigDecimal.ZERO, TransactionType.TRANSFER_OWN, fromAccount, toAccount);
+        saveTransaction(destAccount, amount, BigDecimal.ZERO, TransactionType.DEPOSIT, fromAccount, toAccount);
     }
 
     @Override
@@ -134,6 +194,7 @@ public class BankServiceImpl implements BankService {
         Transaction trans = Transaction.builder()
         .account(account)
         .amount(amount)
+        .commission(commission)
         .type(type)
         .timestamp(LocalDateTime.now())
         .sourceAccountNumber(src)

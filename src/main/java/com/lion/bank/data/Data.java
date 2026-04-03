@@ -38,32 +38,34 @@ public class Data implements CommandLineRunner {
                 .name(name)
                 .email(email)
                 .password(passwordEncoder.encode("123"))
+                .isVerified(true)
                 .build();
-        userRepository.save(user);
+        user = userRepository.save(user);
 
-        Account account1 = Account.builder()
+        Long userId = user.getId();
+
+        Account checking = Account.builder()
                 .user(user)
-                .accountNumber("CK-" + name.toUpperCase())
+                .accountNumber(String.format("%03d", userId))
                 .type(AccountType.CHECKING)
-                .balance(new BigDecimal("25800"))
-                .build();
-
-        Account account2 = Account.builder()
-                .user(user)
-                .accountNumber("SV-" + name.toUpperCase())
-                .type(AccountType.SAVINGS)
                 .balance(new BigDecimal("5000"))
                 .build();
+        accountRepository.save(checking);
 
-        Account account3 = Account.builder()
+        Account savings = Account.builder()
                 .user(user)
-                .accountNumber("IN-" + name.toUpperCase())
-                .type(AccountType.INVESTMENT)
-                .balance(new BigDecimal("3000"))
+                .accountNumber(String.format("%03d_1", userId))
+                .type(AccountType.SAVINGS)
+                .balance(BigDecimal.ZERO)
                 .build();
+        accountRepository.save(savings);
 
-        accountRepository.save(account1);
-        accountRepository.save(account2);
-        accountRepository.save(account3);
+        Account investment = Account.builder()
+                .user(user)
+                .accountNumber(String.format("%03d_2", userId))
+                .type(AccountType.INVESTMENT)
+                .balance(BigDecimal.ZERO)
+                .build();
+        accountRepository.save(investment);
     }
 }

@@ -32,6 +32,8 @@ public class User implements UserDetails {
     private String name;
     private String email;
     private String password;
+    private boolean isVerified;
+    private String verificationToken;
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<Account> accounts;
@@ -65,6 +67,6 @@ public class User implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return true;
+        return isVerified;
     }
 }

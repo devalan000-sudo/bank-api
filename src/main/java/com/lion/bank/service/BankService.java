@@ -9,9 +9,9 @@ import com.lion.bank.dto.UserDTO;
 
 public interface BankService {
     UserDTO getUserDetails(Long userId);
-    //List<ContactDTO> getContacts(Long currentUserId);
     void deposit(String accountNumber, BigDecimal amount);
     void withdraw(String accountNumber, BigDecimal amount);
     void transfer(Long currentUserId, String sourceAccount, String destinationAccount, BigDecimal amount);
+    void moveToAccount(Long userId, String fromAccount, String toAccount, BigDecimal amount);
     List<TransactionDTO> getHistory(String accountNumber);
 }

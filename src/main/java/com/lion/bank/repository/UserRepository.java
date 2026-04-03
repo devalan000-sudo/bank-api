@@ -8,7 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import com.lion.bank.entity.User;
 
 public interface UserRepository extends JpaRepository<User, Long>{
-    Optional<User> findByEmail(String emal);
+    Optional<User> findByEmail(String email);
+    Optional<User> findByVerificationToken(String token);
     List<User> findAllByIdNot(Long id);
 
 }

@@ -48,6 +48,15 @@ public class BankController {
         return ResponseEntity.ok("Transferencia realizada con exito");
     }
 
+    @PostMapping("/move")
+    public ResponseEntity<String> moveToAccount(@AuthenticationPrincipal User user, @RequestBody TransactionRequestDTO request){
+        bankService.moveToAccount(user.getId(),
+                request.getSourceAccountNumber(),
+                request.getDestinationAccountNumber(),
+                request.getAmount());
+        return ResponseEntity.ok("Movimiento entre cuentas realizado con exito");
+    }
+
     @GetMapping("history/{accountNumber}")
     public ResponseEntity<List<TransactionDTO>> getHistory(@PathVariable String accountNumber){
         return ResponseEntity.ok(bankService.getHistory(accountNumber));
